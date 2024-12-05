@@ -4,20 +4,35 @@ import './styles.css';
 
 const App = () => {
     const [hospitals, setHospitals] = useState([]);
-    const [searchTerm, setSearchTerm] = useState("");
     const [filteredHospitals, setFilteredHospitals] = useState([]);
+    const [regions, setRegions] = useState([]); // 지역 리스트
+    const [selectedRegion, setSelectedRegion] = useState(null); // 선택된 지역
+    const [searchTerm, setSearchTerm] = useState("");
     const [selectedHospitalId, setSelectedHospitalId] = useState(null);
     const mapRef = useRef(null);
     const map = useRef(null);
     const [currentPosition, setCurrentPosition] = useState(null);
-    const markers = useRef([]);    
+    const markers = useRef([]);
 
     useEffect(() => {
         const fetchHospitals = async () => {
             try {
+                // 병원 데이터 가져오기
                 const response = await axios.get("https://volnewmer.co.kr/wp-json/wp/v2/hospital/?per_page=100");
-                setHospitals(response.data);
-                setFilteredHospitals(response.data);
+                const hospitalData = response.data;
+
+                // POST 데이터에서 hospital_areas 정보 추출
+                const uniqueRegions = Array.from(
+                    hospitalData
+                        .flatMap(hospital => hospital.hospital_areas || [])
+                        .filter(area => area.is_parent) // is_parent가 true인 항목만
+                        .reduce((map, area) => map.set(area.id, area), new Map()) // 고유 ID를 기준으로 중복 제거
+                        .values() // 고유 지역 값 추출
+                );
+
+                setRegions(uniqueRegions);
+                setHospitals(hospitalData);
+                setFilteredHospitals(hospitalData);
             } catch (error) {
                 console.error("Error fetching hospital data:", error);
             }
@@ -44,13 +59,11 @@ const App = () => {
 
     useEffect(() => {
         if (hospitals.length > 0 && currentPosition && !map.current) {
-            // 지도 초기화
             map.current = new window.naver.maps.Map(mapRef.current, {
                 center: new window.naver.maps.LatLng(currentPosition.lat, currentPosition.lng),
-                zoom: 16, // 초기 줌 고정
+                zoom:16,
             });
 
-            // 사용자 위치 마커 추가
             new window.naver.maps.Marker({
                 position: new window.naver.maps.LatLng(currentPosition.lat, currentPosition.lng),
                 map: map.current,
@@ -68,29 +81,24 @@ const App = () => {
     }, [currentPosition, hospitals]);
 
     const updateMarkers = (hospitalList) => {
-        // Clear existing markers
         markers.current.forEach(({ marker }) => {
             if (marker instanceof window.naver.maps.Marker) {
                 marker.setMap(null);
             }
         });
         markers.current = [];
+        const bounds = new window.naver.maps.LatLngBounds();
 
-        // Add new markers
         hospitalList.forEach((hospital) => {
             const marker = new window.naver.maps.Marker({
                 position: new window.naver.maps.LatLng(hospital.acf.latitude, hospital.acf.longitude),
                 map: map.current,
                 title: hospital.title.rendered,
-            });     
+            });
             const infoWindow = new window.naver.maps.InfoWindow({
                 content: `<div style="padding:10px;">
-                    <h4>
-                    <a href="${hospital.acf.link ? hospital.acf.link: "javascript:void(0)"}" target="_blank">
-                        ${hospital.title.rendered}
-                    </a>                    
-                    </h4>                    
-                    <p>${hospital.acf.address ? hospital.acf.address: "업데이트 예정"}</p>
+                    <h4><a href="${hospital.acf.link || "javascript:void(0)"}" target="_blank">${hospital.title.rendered}</a></h4>
+                    <p>${hospital.acf.address || "업데이트 예정"}</p>
                 </div>`,
             });
 
@@ -99,25 +107,35 @@ const App = () => {
             });
 
             markers.current.push({ marker, infoWindow, id: hospital.id });
+            bounds.extend(marker.getPosition());
         });
+        // 지도 중심 및 줌 조정
+        if (!hospitalList.length) {
+            console.warn("병원 리스트가 비어 있습니다.");
+        } else {
+            map.current.fitBounds(bounds); // 마커 범위에 맞게 지도 조정
+            map.current.setZoom(14); // 줌 레벨 14로 설정
+        }        
+    };
 
-        // Adjust map bounds to fit all markers
-        // if (hospitalList.length > 0) {
-        //     const bounds = new window.naver.maps.LatLngBounds();
-        //     hospitalList.forEach((hospital) => {
-        //         bounds.extend(new window.naver.maps.LatLng(hospital.acf.latitude, hospital.acf.longitude));
-        //     });
-        //     map.current.fitBounds(bounds);
-        // }
+    const handleRegionFilter = (regionId) => {
+        setSelectedRegion(regionId);
+
+        const filtered = hospitals.filter(hospital =>
+            (hospital.hospital_areas || []).some(area => area.id === regionId)
+        );
+
+        setFilteredHospitals(filtered);
+        updateMarkers(filtered);
     };
 
     const handleInputChange = (value) => {
         setSearchTerm(value);
 
         const filtered = hospitals.filter(
-            (hospital) =>
+            hospital =>
                 hospital.title.rendered.toLowerCase().includes(value.toLowerCase()) ||
-                (hospital.acf.address.toLowerCase() || "").includes(value.toLowerCase())
+                (hospital.acf.address || "").toLowerCase().includes(value.toLowerCase())
         );
 
         setFilteredHospitals(filtered);
@@ -126,35 +144,15 @@ const App = () => {
 
     const handleListClick = (hospital) => {
         setSelectedHospitalId(hospital.id); // 클릭된 병원의 ID 저장
-        if (!map.current) {
-            console.error("Map is not initialized");
-            return;
-        }
-    
-        // 병원의 마커 객체 찾기
-        const markerObj = markers.current.find((item) => item.id === hospital.id);
-        if (markerObj) {
-            const { marker, infoWindow } = markerObj;
-    
-            // 병원의 위치로 지도 중심 이동
-            const position = marker.getPosition();
-            if (position) {
-                map.current.setCenter(position);
-                // map.current.setZoom(17); // 확대 레벨 설정
-            } else {
-                console.error("Marker position is invalid");
-            }
-    
-            // 병원 정보창 열기
-            if (infoWindow) {
-                infoWindow.open(map.current, marker);
-            } else {
-                console.error("InfoWindow not found for this marker");
-            }
-        } else {
-            console.error("Marker not found for the selected hospital");
+
+        // 지도 중심 이동 (선택)
+        if (map.current) {
+            map.current.setCenter(new window.naver.maps.LatLng(hospital.acf.latitude, hospital.acf.longitude));
+            map.current.setZoom(17);
         }
     };
+
+    
 
     return (
         <div className="app-container">
@@ -167,24 +165,42 @@ const App = () => {
                     onChange={(e) => handleInputChange(e.target.value)}
                     className="search-input"
                 />
+                <div className="region-buttons">
+                    {regions.map(region => (
+                        <button
+                            key={region.id}
+                            onClick={() => handleRegionFilter(region.id)}
+                            className={selectedRegion === region.id ? "active-region-button" : "region-button"}
+                        >
+                            {region.name}
+                        </button>
+                    ))}
+                </div>
             </header>
             <main className="main-content">
                 <div ref={mapRef} className="map-container"></div>
                 <aside className="hospital-list">
                     <h2>검색 결과</h2>
                     <ul>
-                        {filteredHospitals.map((hospital) => (
+                        {filteredHospitals.map(hospital => (
                             <li key={hospital.id} className="hospital-item">
                                 <h3
-                                    onClick={() => handleListClick(hospital)}
+                                    onClick={() => {
+                                        const marker = markers.current.find(m => m.id === hospital.id);
+                                        if (marker) {
+                                            handleListClick(hospital);
+                                            map.current.setCenter(marker.marker.getPosition());
+                                            marker.infoWindow.open(map.current, marker.marker);
+                                        }
+                                    }}
                                     style={{
                                         cursor: "pointer",
-                                        color: selectedHospitalId === hospital.id ? "#0056b3" : "#777777", // 선택된 병원은 빨간색
+                                        color: selectedHospitalId === hospital.id ? "#0056b3" : "#777777",
                                     }}
                                 >
                                     {hospital.title.rendered}
                                 </h3>
-                                <p>{hospital.acf.address ? hospital.acf.address: "업데이트 예정"}</p>
+                                <p>{hospital.acf.address || "업데이트 예정"}</p>
                             </li>
                         ))}
                     </ul>
