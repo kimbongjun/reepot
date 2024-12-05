@@ -1,0 +1,88 @@
+/* styles.css */
+@import url('//fonts.googleapis.com/earlyaccess/notosanskr.css');
+body {
+    margin: 0;
+    font-family: "Noto Sans KR", sans-serif;
+    background-color: #f9f9f9;
+}
+input,button,select,textarea{
+    font-family: "Noto Sans KR", sans-serif;
+}
+ul{
+    margin :0;
+    padding:0;
+}
+li{
+    list-style: none;
+}
+.app-container {
+    display: flex;
+    flex-direction: column;    
+}
+a{
+    text-decoration: none;
+    color: #0056b3;
+}
+
+.header {
+    background-color: #777777;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+}
+
+.search-input {
+    margin-top: 10px;
+    padding: 10px;
+    width: 80%;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.search-button {
+    margin-left: 10px;
+    padding: 10px 20px;
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.search-button:hover {
+    background-color: #003d80;
+}
+
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    height: 1000px;
+}
+
+.map-container {
+    flex: 3;
+    height: 100%;
+}
+
+.hospital-list {
+    flex: 1;
+    background-color: white;
+    border-left: 1px solid #ddd;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.hospital-item {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.hospital-item h3 {
+    margin: 0 0 5px;
+}
+
+.footer {
+    background-color: #f1f1f1;
+    text-align: center;
+    padding: 10px;
+}
