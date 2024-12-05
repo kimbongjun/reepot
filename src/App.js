@@ -10,8 +10,7 @@ const App = () => {
     const mapRef = useRef(null);
     const map = useRef(null);
     const [currentPosition, setCurrentPosition] = useState(null);
-    const markers = useRef([]);
-    const markerCluster = useRef(null); // 클러스터링 관리 객체
+    const markers = useRef([]);    
 
     useEffect(() => {
         const fetchHospitals = async () => {
